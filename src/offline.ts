@@ -10,13 +10,21 @@ const DB_NAME = 'reimbo-offline'
 const STORE = 'queue'
 const notify = () => window.dispatchEvent(new Event('queue-changed'))
 
+let dbPromise: Promise<IDBDatabase> | null = null
+
+// One shared connection. Opening a new one per call (as before) leaked connections on a long-lived phone tab.
 function open(): Promise<IDBDatabase> {
-  return new Promise((res, rej) => {
+  dbPromise ??= new Promise((res, rej) => {
     const r = indexedDB.open(DB_NAME, 1)
     r.onupgradeneeded = () => r.result.createObjectStore(STORE, { keyPath: 'id', autoIncrement: true })
-    r.onsuccess = () => res(r.result)
-    r.onerror = () => rej(r.error)
+    r.onsuccess = () => {
+      r.result.onclose = () => { dbPromise = null }
+      r.result.onversionchange = () => { r.result.close(); dbPromise = null }
+      res(r.result)
+    }
+    r.onerror = () => { dbPromise = null; rej(r.error) }
   })
+  return dbPromise
 }
 
 async function run<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {

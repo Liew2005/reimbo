@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CATEGORIES, type Car, type ExpenseDetail, type ExpenseValues, type PaymentMethod } from './types'
 import { Icon } from './ui'
-import { today } from './util'
+import { prepareReceipt, today } from './util'
+
+const MAX_FILES = 12
 
 type Props = {
   cars: Car[]
@@ -27,7 +29,34 @@ export function ExpenseForm({ cars, methods, carId, initial, submitLabel, onSubm
   const [existing, setExisting] = useState(initial?.receipts ?? [])
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [preparing, setPreparing] = useState(0)
   const fileRef = useRef<HTMLInputElement>(null)
+  const camRef = useRef<HTMLInputElement>(null)
+
+  /** Photos are shrunk one at a time as soon as they are picked, so only small files are kept in memory. */
+  async function addFiles(list: FileList | null) {
+    const picked = Array.from(list ?? [])
+    if (!picked.length) return
+    setErr('')
+    setPreparing((n) => n + picked.length)
+    for (const f of picked) {
+      try {
+        const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+        if (!isPdf && !f.type.startsWith('image/')) { setErr(`${f.name || 'That file'} is not a photo or PDF.`); continue }
+        if (existing.length + files.length >= MAX_FILES) { setErr(`Up to ${MAX_FILES} receipts per expense.`); continue }
+        const src = isPdf && f.type !== 'application/pdf' ? new File([f], f.name, { type: 'application/pdf' }) : f
+        const p = await prepareReceipt(src)
+        const out = new File([p.blob], p.name, { type: p.blob.type || src.type })
+        const limit = isPdf ? 25 : 10
+        if (out.size > limit * 1048576) { setErr(`${f.name || 'That file'} is too big (over ${limit} MB). Try a smaller one.`); continue }
+        setFiles((x) => [...x, out])
+      } catch {
+        setErr('Could not read that file. Try again.')
+      } finally {
+        setPreparing((n) => n - 1)
+      }
+    }
+  }
   const method = methods.find((m) => m.id === pm)
   const previews = useMemo(() => files.map((f) => (f.type.startsWith('image/') ? URL.createObjectURL(f) : '')), [files])
   useEffect(() => () => previews.forEach((u) => u && URL.revokeObjectURL(u)), [previews])
@@ -102,9 +131,13 @@ export function ExpenseForm({ cars, methods, carId, initial, submitLabel, onSubm
               <button type="button" aria-label="Remove receipt" onClick={() => setFiles((x) => x.filter((_, j) => j !== i))}><Icon name="x" size={14} /></button>
             </div>
           ))}
-          <button type="button" className="snap" onClick={() => fileRef.current?.click()}><Icon name="camera" />Snap</button>
-          <input ref={fileRef} type="file" accept="image/*,application/pdf" multiple
-            onChange={(e) => { setFiles((x) => [...x, ...Array.from(e.target.files ?? [])]); e.target.value = '' }} />
+          {preparing > 0 && <div className="thumbf" role="status" aria-label="Preparing photo"><div className="pdf">…</div></div>}
+          <button type="button" className="snap" onClick={() => camRef.current?.click()}><Icon name="camera" />Camera</button>
+          <button type="button" className="snap" onClick={() => fileRef.current?.click()}><Icon name="clip" />Photos / PDF</button>
+          <input ref={camRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
+            onChange={(e) => { void addFiles(e.target.files); e.target.value = '' }} />
+          <input ref={fileRef} type="file" accept="image/*,application/pdf,.pdf" multiple style={{ display: 'none' }}
+            onChange={(e) => { void addFiles(e.target.files); e.target.value = '' }} />
         </div>
       </div>
 
@@ -116,7 +149,7 @@ export function ExpenseForm({ cars, methods, carId, initial, submitLabel, onSubm
       <label><span className="lab">Note</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="optional" /></label>
 
       {err && <p className="error">{err}</p>}
-      <div className="savebar"><button className="btn" disabled={busy}>{busy ? 'Saving…' : submitLabel}</button></div>
+      <div className="savebar"><button className="btn" disabled={busy || preparing > 0}>{busy ? 'Saving…' : preparing > 0 ? 'Preparing photo…' : submitLabel}</button></div>
     </form>
   )
 }

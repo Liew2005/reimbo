@@ -31,15 +31,17 @@ export function AddExpense({ cars, methods, carId, toast, onSaved }: Props) {
       throw e
     }
     let failed = 0
+    let reason = ''
     for (let i = 0; i < prepared.length; i++) {
       try {
         await api.upload(id, prepared[i].blob, prepared[i].name)
       } catch (e) {
         if (isNetworkError(e)) { await saveOffline(id, prepared.slice(i)); onSaved(); return }
         failed++
+        reason = e instanceof Error ? e.message : ''
       }
     }
-    toast(failed ? `Saved ${rm(v.amount_cents)}, ${failed} receipt failed to upload` : `Saved ${rm(v.amount_cents)}`)
+    toast(failed ? `Saved ${rm(v.amount_cents)}, but ${failed} receipt failed${reason ? ': ' + reason : ''}. Add it from Edit.` : `Saved ${rm(v.amount_cents)}`)
     setN((x) => x + 1)
     onSaved()
   }

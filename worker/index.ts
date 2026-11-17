@@ -20,7 +20,7 @@ type Env = {
 const app = new Hono<{ Bindings: Env }>()
 
 const CATEGORIES = ['service', 'parts', 'addon', 'fuel', 'toll_parking', 'insurance', 'road_tax', 'other']
-const MAX_RECEIPT_BYTES = 10 * 1024 * 1024
+const MAX_RECEIPT_BYTES = 25 * 1024 * 1024
 const SESSION_MS = 30 * 24 * 3600 * 1000
 
 // ---------- auth (single user, shared password -> signed cookie) ----------
@@ -263,7 +263,7 @@ app.post('/api/expenses/:id/receipts', async (c) => {
   const file = form.get('file')
   if (!(file instanceof File)) return c.json({ error: 'No file' }, 400)
   if (!(file.type.startsWith('image/') || file.type === 'application/pdf')) return c.json({ error: 'Images or PDF only' }, 400)
-  if (file.size > MAX_RECEIPT_BYTES) return c.json({ error: 'File over 10 MB' }, 400)
+  if (file.size > MAX_RECEIPT_BYTES) return c.json({ error: 'File over 25 MB' }, 400)
   const key = `expenses/${id}/${crypto.randomUUID()}`
   await c.env.RECEIPTS.put(key, file.stream(), { httpMetadata: { contentType: file.type } })
   const r = await c.env.DB.prepare('INSERT INTO receipts (expense_id, r2_key, content_type, size_bytes) VALUES (?,?,?,?)')

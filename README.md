@@ -23,7 +23,7 @@ Desktop:
 
 ## Features
 
-- **Fast capture:** add an expense in seconds from the phone, with receipt photos (compressed before upload).
+- **Fast capture:** add an expense in seconds from the phone, with several receipt photos or PDFs per expense (photos are shrunk on the phone before upload).
 - **Mixed payment methods:** every method is marked claimable or not. Company-card spend is still listed, but kept out of the reimbursable total.
 - **Multiple cars:** company car now, personal car later, each with its own expenses and service history.
 - **Claims:** pick unclaimed items, build a claim, track draft / submitted / reimbursed. Exports a PDF report (items table, totals, every receipt as a numbered appendix), a CSV, and a ZIP of receipts. Items in a submitted claim are locked.

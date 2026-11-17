@@ -22,21 +22,31 @@ export const dayNum = (iso: string) => iso.slice(8, 10)
 export const monAbbr = (iso: string) => parse(iso).toLocaleDateString('en-MY', { month: 'short' })
 
 /** Shrink phone photos before upload (keeps R2 and mobile data small). PDFs pass through. */
+const SMALL_IMAGE = 1.5 * 1024 * 1024
+
 export async function prepareReceipt(file: File): Promise<{ blob: Blob; name: string }> {
-  if (!file.type.startsWith('image/')) return { blob: file, name: file.name }
+  // PDFs and already-small images pass through (so preparing twice is harmless).
+  if (!file.type.startsWith('image/') || file.size <= SMALL_IMAGE) return { blob: file, name: file.name }
+  let bmp: ImageBitmap | null = null
+  let canvas: HTMLCanvasElement | null = null
   try {
-    const bmp = await createImageBitmap(file)
+    // Decode straight to a smaller size: a 50 MP photo fully decoded is ~200 MB, and a few of those
+    // in one session used to exhaust the phone's memory, so later photos failed until a refresh.
+    try { bmp = await createImageBitmap(file, { resizeWidth: 1800, resizeQuality: 'medium' }) } catch { bmp = await createImageBitmap(file) }
     const scale = Math.min(1, 1800 / Math.max(bmp.width, bmp.height))
-    const w = Math.round(bmp.width * scale)
-    const h = Math.round(bmp.height * scale)
-    const canvas = document.createElement('canvas')
+    const w = Math.max(1, Math.round(bmp.width * scale))
+    const h = Math.max(1, Math.round(bmp.height * scale))
+    canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
     canvas.getContext('2d')!.drawImage(bmp, 0, 0, w, h)
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.82))
+    const blob = await new Promise<Blob | null>((res) => canvas!.toBlob(res, 'image/jpeg', 0.82))
     if (blob && blob.size < file.size) return { blob, name: file.name.replace(/\.\w+$/, '') + '.jpg' }
   } catch {
     // fall through to the original file
+  } finally {
+    bmp?.close()
+    if (canvas) { canvas.width = 0; canvas.height = 0 } // hand the canvas memory back right away
   }
   return { blob: file, name: file.name }
 }

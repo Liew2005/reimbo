@@ -17,7 +17,8 @@ One Worker does everything. Static files come from the Worker's `assets` binding
 - Five tabs: Add, Expenses, Claims, Service, Setup. No router library; the tab is component state.
 - `api.ts` wraps `fetch`, throws `AuthError` on 401 (which returns the user to login) and lets network failures surface as `TypeError`, which the offline code relies on.
 - PDF, CSV and ZIP are built in the browser (`pdf.ts`), so the server never renders documents and costs nothing.
-- Receipt photos are resized and recompressed on the phone before upload (`prepareReceipt` in `util.ts`) to stay small in R2.
+- Receipt photos are resized and recompressed on the phone before upload (`prepareReceipt` in `util.ts`) to stay small in R2. Decoding is done at the target size and bitmaps/canvases are released straight away, because decoding full 50 MP camera photos exhausted phone memory after a few shots.
+- An expense takes up to 12 receipts, each an image (10 MB after shrinking) or a PDF (25 MB). Uploads retry on a stale connection, and offline ones are queued.
 - Styling is a single CSS file driven by design tokens, with light and dark themes and reduced-motion support.
 
 ## Offline queue (`offline.ts`)

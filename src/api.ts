@@ -32,9 +32,21 @@ export const api = {
   patch: <T>(path: string, body: unknown) => request<T>(path, jsonInit('PATCH', body)),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   upload: async (expenseId: number, file: Blob, name: string) => {
-    const form = new FormData()
-    form.append('file', new File([file], name, { type: file.type }))
-    return request<{ id: number }>(`/expenses/${expenseId}/receipts`, { method: 'POST', body: form })
+    // A phone often has a dead connection after coming back from the camera app; the first request then
+    // fails with a TypeError and the next one works. Retry quietly instead of failing the receipt.
+    let last: unknown
+    for (let i = 0; i < 3; i++) {
+      try {
+        const form = new FormData()
+        form.append('file', new File([file], name, { type: file.type }))
+        return await request<{ id: number }>(`/expenses/${expenseId}/receipts`, { method: 'POST', body: form })
+      } catch (e) {
+        last = e
+        if (!(e instanceof TypeError)) throw e
+        await new Promise((r) => setTimeout(r, 700 * (i + 1)))
+      }
+    }
+    throw last
   },
   blob: async (path: string): Promise<Blob> => {
     const res = await fetch('/api' + path, { credentials: 'same-origin' })
