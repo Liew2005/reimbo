@@ -3,6 +3,7 @@ import { api } from './api'
 import { Backup } from './Backup'
 import { Sheet } from './sheet'
 import type { ThemePref } from './theme'
+import { ChangePassword } from './ChangePassword'
 import { TwoFactor } from './TwoFactor'
 import type { Car, PaymentMethod } from './types'
 
@@ -65,6 +66,7 @@ export function Settings({ cars, methods, theme, setTheme, reload, toast, onLogo
         </section>
 
         <TwoFactor toast={toast} />
+        <ChangePassword onSignedOut={onLogout} />
         <Backup toast={toast} />
 
         <button className="btn2" onClick={async () => { await api.post('/logout'); onLogout() }}>Log out</button>

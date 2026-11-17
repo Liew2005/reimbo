@@ -46,6 +46,15 @@ Money is integer sen to avoid floating point errors. Dates are `YYYY-MM-DD` in M
 5. Backup codes are stored only as SHA-256 hashes and are removed once used.
 6. Rate limit: 5 failed attempts per IP per 15 minutes, counted across both steps, stored in `login_attempts`.
 
+### Changing and resetting the password
+- Until it is changed in the app, the `APP_PASSWORD` secret is the password. After that, a salted PBKDF2-SHA256 hash (100k iterations, the Workers maximum) in `auth_kv` takes over and the secret is ignored.
+- **Change** (Setup tab) needs the current password, and an authenticator or backup code when 2FA is on.
+- **Forgot password** emails a single-use link that expires in 15 minutes. Only a hash of the token is stored, only the newest link works, and at most 3 emails go out per hour. The link opens the sign-in screen's reset form and is removed from the address bar straight away.
+- **2FA is never bypassed.** With 2FA on, a reset also needs an authenticator or backup code, so access to the inbox alone is not enough.
+- Both flows bump an `auth_epoch` counter that is part of the key signing every session, pending and trusted-device token. One increment signs out all devices and clears every "trust this device" cookie.
+- Failed attempts at the current password, the reset token or the 2FA code share the login rate limit. A "your password was changed" email goes out after each change.
+- `scripts/test-password.mjs` covers change, reset, expiry, single use, and the 2FA interactions.
+
 2FA secrets live in `auth_kv`, a table the API never returns. They are kept out of `settings` because `GET /api/settings` returns every row there.
 
 ## Backups

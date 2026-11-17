@@ -3,6 +3,8 @@ export type Env = {
   RECEIPTS: R2Bucket
   APP_PASSWORD: string
   SESSION_SECRET: string
+  RESEND_API_KEY?: string
+  REMINDER_EMAIL?: string
 }
 
 /** Today in Malaysia time (UTC+8), as YYYY-MM-DD. */

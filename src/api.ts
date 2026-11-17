@@ -1,17 +1,20 @@
 export class AuthError extends Error {}
+export class ApiError extends Error {
+  constructor(message: string, public needs2fa = false) { super(message) }
+}
 
 let onUnauthorized: (() => void) | null = null
 export const setUnauthorizedHandler = (fn: () => void) => { onUnauthorized = fn }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch('/api' + path, { credentials: 'same-origin', ...init })
-  if (res.status === 401 && !path.startsWith('/login')) {
+  if (res.status === 401 && !path.startsWith('/login') && !path.startsWith('/password')) {
     onUnauthorized?.()
     throw new AuthError('Unauthorized')
   }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error || res.statusText)
+    throw new ApiError(body.error || res.statusText, !!body.needs_2fa)
   }
   return res.json() as Promise<T>
 }

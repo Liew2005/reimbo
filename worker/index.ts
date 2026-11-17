@@ -5,6 +5,8 @@ import claimsApp from './claims'
 import backupApp, { runBackup } from './backup'
 import { runReminders } from './reminders'
 import twofaApp, { checkSecondFactor, kvGet } from './twofa'
+import { failures, makeToken, MAX_LOGIN_ATTEMPTS, recordFailure, safeEqual, secretFor, sign, tokenOk, tooMany, type Ctx } from './authlib'
+import { checkPassword, passwordPrivate, passwordPublic } from './password'
 
 type Env = {
   DB: D1Database
@@ -22,89 +24,36 @@ const MAX_RECEIPT_BYTES = 10 * 1024 * 1024
 const SESSION_MS = 30 * 24 * 3600 * 1000
 
 // ---------- auth (single user, shared password -> signed cookie) ----------
-const enc = new TextEncoder()
-
-function b64u(buf: ArrayBuffer): string {
-  let s = ''
-  for (const b of new Uint8Array(buf)) s += String.fromCharCode(b)
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-async function sign(secret: string, data: string): Promise<string> {
-  const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
-  return b64u(await crypto.subtle.sign('HMAC', key, enc.encode(data)))
-}
-
-async function safeEqual(a: string, b: string): Promise<boolean> {
-  const [ha, hb] = await Promise.all([a, b].map((s) => crypto.subtle.digest('SHA-256', enc.encode(s))))
-  const x = new Uint8Array(ha)
-  const y = new Uint8Array(hb)
-  let d = 0
-  for (let i = 0; i < x.length; i++) d |= x[i] ^ y[i]
-  return d === 0
-}
-
-const MAX_LOGIN_ATTEMPTS = 5
-const LOGIN_WINDOW_MS = 15 * 60 * 1000
 const TRUST_MS = 30 * 24 * 3600 * 1000
 const PENDING_MS = 5 * 60 * 1000
 
-type Ctx = Context<{ Bindings: Env }>
-
-async function failures(c: Ctx, ip: string) {
-  const now = Date.now()
-  await c.env.DB.prepare('DELETE FROM login_attempts WHERE at < ?').bind(now - 24 * 3600 * 1000).run()
-  const r = await c.env.DB.prepare('SELECT COUNT(*) AS n, MIN(at) AS first FROM login_attempts WHERE ip = ? AND at > ?')
-    .bind(ip, now - LOGIN_WINDOW_MS).first<{ n: number; first: number | null }>()
-  return { n: r?.n ?? 0, first: r?.first ?? now }
-}
-
-const tooMany = (c: Ctx, first: number) => {
-  const mins = Math.max(1, Math.ceil((first + LOGIN_WINDOW_MS - Date.now()) / 60000))
-  return c.json({ error: `Too many attempts. Try again in ${mins} min.` }, 429)
-}
-
-async function recordFailure(c: Ctx, ip: string, n: number, what: string) {
-  await c.env.DB.prepare('INSERT INTO login_attempts (ip, at) VALUES (?, ?)').bind(ip, Date.now()).run()
-  const left = MAX_LOGIN_ATTEMPTS - (n + 1)
-  if (left <= 0) return c.json({ error: 'Too many attempts. Try again in 15 min.' }, 429)
-  return c.json({ error: `${what} ${left} ${left === 1 ? 'try' : 'tries'} left.` }, 401)
-}
-
-async function makeToken(secret: string, kind: string, ms: number) {
-  const exp = String(Date.now() + ms)
-  return `${exp}.${await sign(secret, kind + exp)}`
-}
-
-async function tokenOk(secret: string, kind: string, t: string | undefined) {
-  if (!t) return false
-  const [exp, sig] = t.split('.')
-  return !!exp && !!sig && Number(exp) > Date.now() && (await safeEqual(sig, await sign(secret, kind + exp)))
-}
-
 async function startSession(c: Ctx, ip: string, trust: boolean) {
+  const secret = await secretFor(c.env)
   await c.env.DB.prepare('DELETE FROM login_attempts WHERE ip = ?').bind(ip).run()
   const secure = new URL(c.req.url).protocol === 'https:'
   const exp = String(Date.now() + SESSION_MS)
-  setCookie(c, 'session', `${exp}.${await sign(c.env.SESSION_SECRET, exp)}`, { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: SESSION_MS / 1000, secure })
+  setCookie(c, 'session', `${exp}.${await sign(secret, exp)}`, { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: SESSION_MS / 1000, secure })
   deleteCookie(c, 'pending', { path: '/' })
-  if (trust) setCookie(c, 'trusted', await makeToken(c.env.SESSION_SECRET, 't', TRUST_MS), { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: TRUST_MS / 1000, secure })
+  if (trust) setCookie(c, 'trusted', await makeToken(secret, 't', TRUST_MS), { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: TRUST_MS / 1000, secure })
   return c.json({ ok: true })
 }
 
+app.route('/', passwordPublic)
+
 app.post('/api/login', async (c) => {
   const body = await c.req.json().catch(() => ({}))
-  if (!c.env.APP_PASSWORD || !c.env.SESSION_SECRET) return c.json({ error: 'Server not configured' }, 500)
+  if (!c.env.SESSION_SECRET) return c.json({ error: 'Server not configured' }, 500)
+  const secret = await secretFor(c.env)
   const ip = c.req.header('CF-Connecting-IP') || 'unknown'
   const f = await failures(c, ip)
   if (f.n >= MAX_LOGIN_ATTEMPTS) return tooMany(c, f.first)
-  if (typeof body.password !== 'string' || !(await safeEqual(body.password, c.env.APP_PASSWORD))) {
+  if (typeof body.password !== 'string' || !(await checkPassword(c.env, body.password))) {
     return recordFailure(c, ip, f.n, 'Wrong password.')
   }
   if (await kvGet(c.env.DB, 'totp_secret')) {
-    if (await tokenOk(c.env.SESSION_SECRET, 't', getCookie(c, 'trusted'))) return startSession(c, ip, false)
+    if (await tokenOk(secret, 't', getCookie(c, 'trusted'))) return startSession(c, ip, false)
     const secure = new URL(c.req.url).protocol === 'https:'
-    setCookie(c, 'pending', await makeToken(c.env.SESSION_SECRET, 'p', PENDING_MS), { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: PENDING_MS / 1000, secure })
+    setCookie(c, 'pending', await makeToken(secret, 'p', PENDING_MS), { httpOnly: true, sameSite: 'Lax', path: '/', maxAge: PENDING_MS / 1000, secure })
     return c.json({ needs_2fa: true })
   }
   return startSession(c, ip, false)
@@ -116,7 +65,7 @@ app.post('/api/login/2fa', async (c) => {
   const ip = c.req.header('CF-Connecting-IP') || 'unknown'
   const f = await failures(c, ip)
   if (f.n >= MAX_LOGIN_ATTEMPTS) return tooMany(c, f.first)
-  if (!(await tokenOk(c.env.SESSION_SECRET, 'p', getCookie(c, 'pending')))) {
+  if (!(await tokenOk(await secretFor(c.env), 'p', getCookie(c, 'pending')))) {
     return c.json({ error: 'Session expired. Enter your password again.' }, 401)
   }
   if (typeof body.code !== 'string' || !(await checkSecondFactor(c.env.DB, body.code))) {
@@ -134,7 +83,7 @@ app.use('/api/*', async (c, next) => {
   const token = getCookie(c, 'session')
   if (token) {
     const [exp, sig] = token.split('.')
-    if (exp && sig && Number(exp) > Date.now() && (await safeEqual(sig, await sign(c.env.SESSION_SECRET, exp)))) {
+    if (exp && sig && Number(exp) > Date.now() && (await safeEqual(sig, await sign(await secretFor(c.env), exp)))) {
       return next()
     }
   }
@@ -368,6 +317,7 @@ async function lockedByReceipt(db: D1Database, receiptId: number): Promise<strin
 app.route('/', serviceApp)
 app.route('/', claimsApp)
 app.route('/', twofaApp)
+app.route('/', passwordPrivate)
 app.route('/', backupApp)
 
 app.notFound((c) => c.json({ error: 'Not found' }, 404))

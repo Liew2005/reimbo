@@ -31,7 +31,7 @@ Desktop:
 - **Service reminders:** by km or date, with an in-app banner and a daily email.
 - **Works offline:** expenses added with no signal are saved on the phone (IndexedDB, photos included) and upload automatically when back online.
 - **Installable PWA:** add to the home screen on Android and iOS, light and dark themes.
-- **Security:** rate-limited login and optional TOTP two-factor with backup codes and a "trust this device" option.
+- **Security:** rate-limited login, optional TOTP two-factor with backup codes and a "trust this device" option, change password in the app, and reset by email (the reset still requires the 2FA code when 2FA is on).
 - **Backups:** weekly automatic snapshot to R2 (last 8 kept), plus a one-tap ZIP download of all data and receipts, and a restore script.
 
 ## Tech stack

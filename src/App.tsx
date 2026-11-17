@@ -56,6 +56,7 @@ export default function App() {
 
   useEffect(() => {
     setUnauthorizedHandler(() => setAuth('out'))
+    if (new URLSearchParams(location.search).has('reset')) { setAuth('out'); return } // opened from a reset email
     Promise.all([api.get('/me').then(reload), sleep(900)])
       .then(() => setAuth('in'))
       .catch((e) => {

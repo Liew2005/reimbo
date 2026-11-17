@@ -27,6 +27,7 @@ Track car spending (service, parts, add-ons, fuel, tolls), keep every receipt, a
 2. **Claims (done):** build a claim from unclaimed items, status tracking, locked items, PDF report with numbered receipt appendix, CSV and ZIP export.
 3. **Service (done):** odometer log, reminders by km or date, due banner, overdue badge on the tab.
 4. **Security (done):** login rate limit (5 per 15 min per IP), TOTP 2FA with backup codes and trusted-device cookie.
+4b. **Passwords (done):** change password in Setup, forgot-password by email, both honouring 2FA, sign-out of all devices on change.
 5. **Safety net (done):** weekly R2 snapshot (keep 8), client-side ZIP backup, restore script, daily reminder email via Resend.
 6. **Polish (done):** redesigned UI (light/dark), PNG app icons, search, summary by category and month, running cost per km, offline queue with auto-upload.
 7. **Ideas, not started:**
