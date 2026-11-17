@@ -19,7 +19,7 @@ export function ExpenseList({ cars, methods, carId, toast, onBuild }: Props) {
   const [err, setErr] = useState('')
 
   const load = useCallback(() => {
-    api.get<Expense[]>(`/expenses?car_id=${carId}`).then(setItems).catch((e) => setErr(e.message))
+    api.get<Expense[]>(`/expenses?car_id=${carId}`).then((n) => setItems((cur) => (cur && JSON.stringify(cur) === JSON.stringify(n) ? cur : n))).catch((e) => setErr(e.message))
   }, [carId])
   useEffect(load, [load])
   useEffect(() => {

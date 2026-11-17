@@ -52,10 +52,12 @@ export async function syncQueue(force = false): Promise<{ done: number; failed: 
   syncing = true
   let done = 0
   let failed = 0
+  let touched = false // only tell the UI when something actually changed, or every poll refetches the list
   try {
     const items = (await listQueued()).sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
     for (const q of items) {
       if (q.error && !force) continue
+      touched = true
       try {
         let id = q.expenseId
         if (!id) {
@@ -80,14 +82,17 @@ export async function syncQueue(force = false): Promise<{ done: number; failed: 
     }
   } finally {
     syncing = false
-    notify()
+    if (touched) notify()
   }
   return { done, failed, left: (await listQueued()).length }
 }
 
+const same = (a: Queued[], b: Queued[]) =>
+  a.length === b.length && a.every((x, i) => x.id === b[i].id && x.error === b[i].error && x.files.length === b[i].files.length)
+
 export function useQueue(): Queued[] {
   const [items, setItems] = useState<Queued[]>([])
-  const refresh = useCallback(() => { listQueued().then(setItems).catch(() => {}) }, [])
+  const refresh = useCallback(() => { listQueued().then((n) => setItems((cur) => (same(cur, n) ? cur : n))).catch(() => {}) }, [])
   useEffect(() => {
     refresh()
     window.addEventListener('queue-changed', refresh)
