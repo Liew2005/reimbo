@@ -4,8 +4,6 @@ A car expense tracker and claim report builder. Snap a receipt, log the spend, a
 
 Runs entirely on the Cloudflare free tier. No servers to maintain and nothing to pay for.
 
-**Live demo:** https://reimbo.liewthesavage.workers.dev (private, single-user)
-
 ## Why
 
 Company car costs (servicing, parts, add-ons, fuel, tolls) get paid in a mix of ways: my own pocket, a company card, sometimes both in one month. Claiming back the right ones means digging through receipts and spreadsheets. Reimbo keeps it all in one place and does the paperwork.
@@ -33,7 +31,7 @@ Desktop:
 - **Service reminders:** by km or date, with an in-app banner and a daily email.
 - **Works offline:** expenses added with no signal are saved on the phone (IndexedDB, photos included) and upload automatically when back online.
 - **Installable PWA:** add to the home screen on Android and iOS, light and dark themes.
-- **Security:** shared password, rate-limited login (5 attempts per 15 minutes per IP), optional TOTP two-factor with backup codes and a "trust this device" option.
+- **Security:** rate-limited login and optional TOTP two-factor with backup codes and a "trust this device" option.
 - **Backups:** weekly automatic snapshot to R2 (last 8 kept), plus a one-tap ZIP download of all data and receipts, and a restore script.
 
 ## Tech stack
@@ -50,56 +48,16 @@ Desktop:
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the pieces fit together.
 
-## Run locally
-
-```
-npm install
-cp .dev.vars.example .dev.vars   # set a local password
-npm run db:local                 # create the local database once
-npm run dev:api                  # API with local D1/R2 on http://localhost:8787
-npm run dev:web                  # UI with hot reload on http://localhost:5173
-```
-
-Or serve the production build from the Worker alone: `npm run preview`, then open http://localhost:8787.
-
-To try it on a phone on the same Wi-Fi, open `http://<laptop-ip>:8787`. Camera capture needs https on some browsers, so the deployed URL is the real test.
-
-## Deploy
-
-Step-by-step in [docs/DEPLOY.md](docs/DEPLOY.md). Short version: create a D1 database and an R2 bucket, put the database id in `wrangler.jsonc`, set the secrets, run `npm run db:remote` and `npm run deploy`.
-
 ## Project layout
 
 ```
 src/         React app (screens, offline queue, PDF builder)
 worker/      Hono API: expenses, claims, service, 2FA, backup, reminders
 migrations/  D1 schema, applied in order
-scripts/     icon generator, restore tool, demo seeding, screenshots, local test scripts
+scripts/     icon generator, restore tool, demo seeding, screenshots, test scripts
 public/      manifest, service worker, icons
-docs/        architecture and deployment notes
+docs/        architecture notes and screenshots
 PLAN.md      decisions, roadmap, what is done
-```
-
-## Tests
-
-There is no framework yet. `scripts/` has Node scripts that exercise the real Worker running under `wrangler dev`:
-
-```
-node scripts/test-2fa.mjs        # login, rate limit, TOTP, backup codes, replay protection
-node scripts/test-backup.mjs     # backup, restore round trip, scheduled R2 snapshot
-node scripts/test-reminders.mjs  # reminder email logic and duplicate protection
-```
-
-Start `npm run dev:api` first. The reminder script needs `RESEND_API_KEY` and `REMINDER_EMAIL` in `.dev.vars`.
-
-## Regenerating the screenshots
-
-With a fresh local database and `npm run dev:api` running:
-
-```
-node scripts/seed-demo.mjs                 # fictional car, expenses, claims, reminders
-npm i --no-save puppeteer-core
-node scripts/screenshots.mjs               # writes docs/screenshots/*.png (needs Chrome)
 ```
 
 ## Roadmap

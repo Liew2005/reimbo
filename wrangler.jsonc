@@ -12,7 +12,6 @@
     {
       "binding": "DB",
       "database_name": "reimbo",
-      // Replace with the real id from `wrangler d1 create reimbo` before deploying.
       "database_id": "bd12c735-eed2-435c-aad9-e2e007199639",
       "migrations_dir": "migrations"
     }

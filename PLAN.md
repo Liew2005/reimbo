@@ -9,7 +9,6 @@ Track car spending (service, parts, add-ons, fuel, tolls), keep every receipt, a
 - Single user: shared password, signed cookie, optional 2FA.
 - Stack, all Cloudflare free tier: React + Vite PWA, Hono on a Worker, D1, R2.
 - Money is stored as integer sen. Dates use Malaysia time.
-- Keep the `workers.dev` URL for now; a custom domain is optional.
 - Receipt reading with Gemini was considered and dropped (manual entry is fast enough).
 
 ## Data model
@@ -35,9 +34,6 @@ Track car spending (service, parts, add-ons, fuel, tolls), keep every receipt, a
    - Custom domain
    - Automated tests (Vitest for the Worker, Playwright for the offline flow)
    - Multi-user accounts, if it is ever shared with others
-
-## Deploy checklist
-See `docs/DEPLOY.md`.
 
 ## Known gaps
 - Offline mode queues new expenses only. Editing or deleting offline is not supported.
