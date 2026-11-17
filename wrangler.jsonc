@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "reimbo",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "reimbo",
+      // Replace with the real id from `wrangler d1 create reimbo` before deploying.
+      "database_id": "bd12c735-eed2-435c-aad9-e2e007199639",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Weekly backup: Sunday 19:00 UTC = Monday 03:00 Malaysia time.
+  // Daily service-reminder email: 01:00 UTC = 09:00 Malaysia time.
+  "triggers": { "crons": ["0 19 * * SUN", "0 1 * * *"] },
+  "r2_buckets": [
+    {
+      "binding": "RECEIPTS",
+      "bucket_name": "reimbo-receipts"
+    }
+  ]
+}

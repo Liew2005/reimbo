@@ -1,0 +1,7 @@
+# Copy to .dev.vars for local development. .dev.vars is git-ignored.
+APP_PASSWORD=change-me-locally
+SESSION_SECRET=any-long-random-string-for-local-use
+
+# Optional, only for testing reminder emails
+# RESEND_API_KEY=
+# REMINDER_EMAIL=
