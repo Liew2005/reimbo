@@ -117,14 +117,36 @@ export async function exportPdf(c: ClaimDetail) {
     doc.setFontSize(9).setTextColor(154, 74, 7).text(`${missing} item${missing > 1 ? 's' : ''} without a receipt.`, M, y)
   }
 
-  // Receipt appendix
-  for (const r of refs) {
+  // Receipt appendix. PDF receipts get one placeholder page per source page here; the real pages are
+  // stamped onto those placeholders with pdf-lib once jsPDF is done (vector, sharp, no page limit).
+  const rcHead = (r: Ref, part = '') => {
     doc.addPage()
-    doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(20).text(r.ref, M, M + 4)
+    doc.setFont('helvetica', 'bold').setFontSize(13).setTextColor(20).text(r.ref + part, M, M + 4)
     doc.setFont('helvetica', 'normal').setFontSize(10)
     doc.text(`${fmtDate(r.expense.date)}  ·  ${r.expense.vendor || categoryLabel(r.expense.category)}  ·  ${money(r.expense.amount_cents)}  ·  ${r.expense.payment_method_name}`, M, M + 11)
+  }
+  type Slot = { page: number; src: import('pdf-lib').PDFDocument; srcPage: number }
+  const slots: Slot[] = []
+  let lib: typeof import('pdf-lib') | null = null
+  for (const r of refs) {
+    if (r.type === 'application/pdf') {
+      try {
+        lib ??= await import('pdf-lib')
+        const src = await lib.PDFDocument.load(await (await api.blob(`/receipts/${r.id}`)).arrayBuffer())
+        const n = src.getPageCount()
+        for (let i = 0; i < n; i++) {
+          rcHead(r, n > 1 ? `  (page ${i + 1} of ${n})` : '')
+          slots.push({ page: doc.getNumberOfPages() - 1, src, srcPage: i })
+        }
+      } catch {
+        rcHead(r)
+        doc.setTextColor(110).text('This PDF receipt could not be read (it may be password-protected). It is included in the ZIP export.', M, M + 24, { maxWidth: W - 2 * M })
+      }
+      continue
+    }
+    rcHead(r)
     if (!r.type?.startsWith('image/')) {
-      doc.setTextColor(110).text('This receipt is a PDF file and cannot be embedded here. It is included in the ZIP export.', M, M + 24)
+      doc.setTextColor(110).text('This receipt cannot be shown here. It is included in the ZIP export.', M, M + 24)
       continue
     }
     try {
@@ -136,7 +158,24 @@ export async function exportPdf(c: ClaimDetail) {
       doc.setTextColor(180, 35, 24).text('Could not load this receipt image.', M, M + 24)
     }
   }
-  doc.save(`${c.claim_no}.pdf`)
+  if (!slots.length || !lib) return doc.save(`${c.claim_no}.pdf`)
+
+  const out = await lib.PDFDocument.load(doc.output('arraybuffer'))
+  const pt = 72 / 25.4
+  const boxW = (W - 2 * M) * pt, boxH = (297 - 2 * M - 20) * pt, top = (M + 17) * pt
+  for (const s of slots) {
+    try {
+      const [emb] = await out.embedPdf(s.src, [s.srcPage])
+      const page = out.getPage(s.page)
+      const k = Math.min(boxW / emb.width, boxH / emb.height)
+      const w = emb.width * k, h = emb.height * k
+      page.drawRectangle({ x: M * pt - 0.5, y: page.getHeight() - top - h - 0.5, width: w + 1, height: h + 1, borderColor: lib.rgb(0.8, 0.8, 0.8), borderWidth: 0.5 })
+      page.drawPage(emb, { x: M * pt, y: page.getHeight() - top - h, width: w, height: h })
+    } catch {
+      out.getPage(s.page).drawText('This page could not be embedded. The PDF is included in the ZIP export.', { x: M * pt, y: out.getPage(s.page).getHeight() - top - 20, size: 10, color: lib.rgb(0.43, 0.43, 0.43) })
+    }
+  }
+  saveBlob(new Blob([(await out.save()) as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }), `${c.claim_no}.pdf`)
 }
 
 const csvCell = (v: string | number | null) => {

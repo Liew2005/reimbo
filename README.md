@@ -26,7 +26,7 @@ Desktop:
 - **Fast capture:** add an expense in seconds from the phone, with several receipt photos or PDFs per expense (photos are shrunk on the phone before upload).
 - **Mixed payment methods:** every method is marked claimable or not. Company-card spend is still listed, but kept out of the reimbursable total.
 - **Multiple cars:** company car now, personal car later, each with its own expenses and service history.
-- **Claims:** pick unclaimed items, build a claim, track draft / submitted / reimbursed. Exports a PDF report (items table, totals, every receipt as a numbered appendix), a CSV, and a ZIP of receipts. Items in a submitted claim are locked.
+- **Claims:** pick unclaimed items, build a claim, track draft / submitted / reimbursed. Edit a draft's items any time. Exports a PDF report (items table, totals, every receipt as a numbered appendix, with PDF receipts merged in page by page), a CSV, and a ZIP of receipts. Items in a submitted claim are locked.
 - **Search and summary:** search by vendor, note, category or amount. Spend by category and month, plus running cost per km from odometer readings.
 - **Service reminders:** by km or date, with an in-app banner and a daily email.
 - **Works offline:** expenses added with no signal are saved on the phone (IndexedDB, photos included) and upload automatically when back online.

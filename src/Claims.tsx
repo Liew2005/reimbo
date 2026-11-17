@@ -52,19 +52,21 @@ export function Claims({ carId, toast, buildSignal }: Props) {
   )
 }
 
-function Builder({ carId, onClose, onCreated }: { carId: number; onClose: () => void; onCreated: (id: number) => void }) {
+/** Picks items for a new claim, or (with `claimId`) edits the items of a draft claim. */
+function Builder({ carId, claimId, onClose, onCreated }: { carId: number; claimId?: number; onClose: () => void; onCreated: (id: number) => void }) {
   const [items, setItems] = useState<Expense[] | null>(null)
   const [sel, setSel] = useState<Set<number>>(new Set())
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
+  const editing = claimId != null
 
   useEffect(() => {
     api.get<Expense[]>(`/expenses?car_id=${carId}`).then((all) => {
-      const free = all.filter((e) => !e.claim_id)
-      setItems(free)
-      setSel(new Set(free.map((e) => e.id)))
+      const pool = all.filter((e) => !e.claim_id || e.claim_id === claimId)
+      setItems(pool)
+      setSel(new Set(pool.filter((e) => (editing ? e.claim_id === claimId : true)).map((e) => e.id)))
     }).catch((e) => setErr(e.message))
-  }, [carId])
+  }, [carId, claimId, editing])
 
   const own = useMemo(() => (items ?? []).filter((e) => e.claimable), [items])
   const co = useMemo(() => (items ?? []).filter((e) => !e.claimable), [items])
@@ -75,10 +77,15 @@ function Builder({ carId, onClose, onCreated }: { carId: number; onClose: () => 
     setBusy(true)
     setErr('')
     try {
-      const r = await api.post<{ id: number }>('/claims', { car_id: carId, expense_ids: [...sel] })
-      onCreated(r.id)
+      if (editing) {
+        await api.put(`/claims/${claimId}/items`, { expense_ids: [...sel] })
+        onCreated(claimId)
+      } else {
+        const r = await api.post<{ id: number }>('/claims', { car_id: carId, expense_ids: [...sel] })
+        onCreated(r.id)
+      }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Could not create claim')
+      setErr(e instanceof Error ? e.message : editing ? 'Could not save items' : 'Could not create claim')
       setBusy(false)
     }
   }
@@ -100,7 +107,7 @@ function Builder({ carId, onClose, onCreated }: { carId: number; onClose: () => 
   )
 
   return (
-    <Sheet title="New claim" onClose={onClose}>
+    <Sheet title={editing ? 'Edit items' : 'New claim'} onClose={onClose}>
       {!items ? <p className="muted">{err || 'Loading…'}</p> : items.length === 0 ? (
         <p className="muted">Nothing left to claim. Every expense is already in a claim.</p>
       ) : (
@@ -109,7 +116,7 @@ function Builder({ carId, onClose, onCreated }: { carId: number; onClose: () => 
           {list('Company card · listed only', 'not claimed', co)}
           <div className="between"><span className="lab">To reimburse</span><b className="mono" style={{ fontSize: 22 }}>{rm(total)}</b></div>
           {err && <p className="error">{err}</p>}
-          <button className="btn" disabled={busy || sel.size === 0} onClick={create}>{busy ? 'Creating…' : `Create claim (${sel.size})`}</button>
+          <button className="btn" disabled={busy || sel.size === 0} onClick={create}>{busy ? (editing ? 'Saving…' : 'Creating…') : editing ? `Save items (${sel.size})` : `Create claim (${sel.size})`}</button>
         </div>
       )}
     </Sheet>
@@ -120,6 +127,7 @@ function ClaimSheet({ id, onClose, onChanged, toast }: { id: number; onClose: ()
   const [c, setC] = useState<ClaimDetail | null>(null)
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState('')
+  const [editingItems, setEditingItems] = useState(false)
   const reload = useCallback(() => { api.get<ClaimDetail>(`/claims/${id}`).then(setC).catch((e) => setErr(e.message)) }, [id])
   useEffect(reload, [reload])
 
@@ -141,9 +149,7 @@ function ClaimSheet({ id, onClose, onChanged, toast }: { id: number; onClose: ()
   const rows = (list: typeof own) => list.map((e, i) => (
     <div className="pitem" key={e.id}>
       <span className="n mono">{i + 1}</span>
-      <span className="nm">{e.vendor || categoryLabel(e.category)} <small>{fmtDayMon(e.date)}</small>
-        {draft && <button className="rmv" onClick={() => run('rm', async () => { await api.del(`/claims/${id}/items/${e.id}`); reload(); onChanged() })}>remove</button>}
-      </span>
+      <span className="nm">{e.vendor || categoryLabel(e.category)} <small>{fmtDayMon(e.date)}</small></span>
       <span className="mono" style={{ fontSize: 13 }}>{rm(e.amount_cents)}</span>
       <span className="rf mono">{e.receipts.length ? rcs.filter((r) => e.receipts.some((x) => x.id === r.id)).map((r) => r.ref).join(' ') : <b style={{ color: '#9a4a07' }}>none</b>}</span>
     </div>
@@ -183,12 +189,14 @@ function ClaimSheet({ id, onClose, onChanged, toast }: { id: number; onClose: ()
         </div>
         {err && <p className="error">{err}</p>}
         <div className="row2">
+          {draft && <button className="btn2" disabled={!!busy} onClick={() => setEditingItems(true)}>Edit items</button>}
           {c.status === 'draft' && <button className="btn2" disabled={!!busy} onClick={() => setStatus('submitted')}>Mark submitted</button>}
           {c.status === 'submitted' && <><button className="btn2" disabled={!!busy} onClick={() => setStatus('reimbursed')}>Mark reimbursed</button><button className="btn2" disabled={!!busy} onClick={() => setStatus('draft')}>Back to draft</button></>}
           {c.status === 'reimbursed' && <button className="btn2" disabled={!!busy} onClick={() => setStatus('submitted')}>Undo reimbursed</button>}
           {draft && <button className="btn2 danger" disabled={!!busy} onClick={() => { if (confirm('Delete this draft claim? Items go back to unclaimed.')) run('del', async () => { await api.del(`/claims/${id}`); onChanged(); onClose() }) }}>Delete draft</button>}
         </div>
       </div>
+      {editingItems && <Builder carId={c.car_id} claimId={id} onClose={() => setEditingItems(false)} onCreated={() => { setEditingItems(false); reload(); onChanged(); toast('Items updated') }} />}
     </Sheet>
   )
 }

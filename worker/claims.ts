@@ -109,6 +109,28 @@ app.delete('/api/claims/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// Replace a draft claim's items in one go (the "Edit items" picker).
+app.put('/api/claims/:id/items', async (c) => {
+  const id = Number(c.req.param('id'))
+  const b = await c.req.json().catch(() => ({}))
+  const ids: number[] = Array.isArray(b.expense_ids) ? [...new Set<number>(b.expense_ids.map(Number))].filter((n) => Number.isInteger(n) && n > 0) : []
+  const cur = await c.env.DB.prepare('SELECT status, car_id FROM claims WHERE id = ?').bind(id).first<{ status: string; car_id: number }>()
+  if (!cur) return c.json({ error: 'Not found' }, 404)
+  if (cur.status !== 'draft') return c.json({ error: 'Claim is not a draft' }, 409)
+  if (ids.length === 0) return c.json({ error: 'Keep at least one item, or delete the draft instead' }, 400)
+  if (ids.length > 200) return c.json({ error: 'Too many items (max 200)' }, 400)
+  const marks = ids.map(() => '?').join(',')
+  const { results } = await c.env.DB.prepare(
+    `SELECT id FROM expenses WHERE id IN (${marks}) AND car_id = ? AND (claim_id IS NULL OR claim_id = ?)`,
+  ).bind(...ids, cur.car_id, id).all()
+  if (results.length !== ids.length) return c.json({ error: 'Some items are already in another claim' }, 409)
+  await c.env.DB.batch([
+    c.env.DB.prepare(`UPDATE expenses SET claim_id = NULL WHERE claim_id = ? AND id NOT IN (${marks})`).bind(id, ...ids),
+    c.env.DB.prepare(`UPDATE expenses SET claim_id = ? WHERE id IN (${marks})`).bind(id, ...ids),
+  ])
+  return c.json({ ok: true })
+})
+
 app.delete('/api/claims/:id/items/:expenseId', async (c) => {
   const id = Number(c.req.param('id'))
   const cur = await c.env.DB.prepare('SELECT status FROM claims WHERE id = ?').bind(id).first<{ status: string }>()

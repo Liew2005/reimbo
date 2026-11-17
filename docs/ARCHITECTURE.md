@@ -16,7 +16,7 @@ One Worker does everything. Static files come from the Worker's `assets` binding
 ## Frontend (`src/`)
 - Five tabs: Add, Expenses, Claims, Service, Setup. No router library; the tab is component state.
 - `api.ts` wraps `fetch`, throws `AuthError` on 401 (which returns the user to login) and lets network failures surface as `TypeError`, which the offline code relies on.
-- PDF, CSV and ZIP are built in the browser (`pdf.ts`), so the server never renders documents and costs nothing.
+- PDF, CSV and ZIP are built in the browser (`pdf.ts`), so the server never renders documents and costs nothing. jsPDF draws the report and a placeholder page (with the R-number header) for every page of every PDF receipt; pdf-lib then embeds the real pages onto those placeholders as vector content. pdf-lib is loaded only when a claim has PDF receipts. Unreadable (e.g. encrypted) PDFs get a note pointing to the ZIP.
 - Receipt photos are resized and recompressed on the phone before upload (`prepareReceipt` in `util.ts`) to stay small in R2. Decoding is done at the target size and bitmaps/canvases are released straight away, because decoding full 50 MP camera photos exhausted phone memory after a few shots.
 - An expense takes up to 12 receipts, each an image (10 MB after shrinking) or a PDF (25 MB). Uploads retry on a stale connection, and offline ones are queued.
 - Styling is a single CSS file driven by design tokens, with light and dark themes and reduced-motion support.
