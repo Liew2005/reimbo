@@ -11,7 +11,6 @@ import { checkSecondFactor, kvDel, kvGet, kvSet } from './twofa'
 //    so an email link alone never gets past 2FA.
 
 const ITER = 100_000 // Workers cap PBKDF2 at 100k iterations
-const MIN_LEN = 10
 const RESET_MS = 15 * 60 * 1000
 
 const b64 = (b: Uint8Array) => btoa(String.fromCharCode(...b))
@@ -63,7 +62,7 @@ const changedMail = (env: Env) =>
   sendMail(env, 'Your Reimbo password was changed', 'Your Reimbo password was just changed and all devices were signed out.\n\nIf this was not you, reset it now from the sign-in page ("Forgot password") and turn on two-factor in Setup.')
 
 const weak = (pw: unknown): string | null =>
-  typeof pw !== 'string' || pw.length < MIN_LEN ? `Use at least ${MIN_LEN} characters.` : pw.length > 200 ? 'That password is too long.' : null
+  typeof pw !== 'string' || pw.length < 1 ? 'Enter a password.' : pw.length > 1000 ? 'That password is too long.' : null
 
 // ---------- public: no session needed ----------
 export const passwordPublic = new Hono<{ Bindings: Env }>()
@@ -126,7 +125,6 @@ passwordPrivate.post('/api/password/change', async (c) => {
   }
   const bad = weak(body.next)
   if (bad) return c.json({ error: bad }, 400)
-  if (body.next === body.current) return c.json({ error: 'Pick a different password from the current one.' }, 400)
   if (await kvGet(c.env.DB, 'totp_secret')) {
     const code = typeof body.code === 'string' ? body.code : ''
     if (!code.trim()) return c.json({ needs_2fa: true, error: 'Enter your authenticator code to confirm.' }, 400)

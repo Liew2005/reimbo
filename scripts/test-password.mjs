@@ -36,9 +36,9 @@ const login = async (pw) => { jar = {}; return call('POST', '/login', { password
 // ---- change password, 2FA off ----
 let r = await login(password); check('login with the starting password', r.status === 200 && r.json.ok)
 r = await call('POST', '/password/change', { current: 'wrong-password', next: NEW1 }); check('change: wrong current password rejected', r.status === 401, JSON.stringify(r))
-r = await call('POST', '/password/change', { current: password, next: 'short' }); check('change: short password rejected', r.status === 400, JSON.stringify(r))
-r = await call('POST', '/password/change', { current: password, next: password }); check('change: same password rejected', r.status === 400, JSON.stringify(r))
-r = await call('POST', '/password/change', { current: password, next: NEW1 }); check('change: works', r.status === 200 && r.json.ok, JSON.stringify(r))
+r = await call('POST', '/password/change', { current: password, next: '' }); check('change: empty password rejected', r.status === 400, JSON.stringify(r))
+r = await call('POST', '/password/change', { current: password, next: 'a' }); check('change: a 1-character password is allowed', r.status === 200, JSON.stringify(r))
+r = await login('a'); r = await call('POST', '/password/change', { current: 'a', next: NEW1 }); check('change: back to a normal password', r.status === 200, JSON.stringify(r))
 r = await call('GET', '/cars'); check('change: old session is signed out', r.status === 401, JSON.stringify(r))
 r = await login(password); check('change: old password no longer works', r.status === 401, JSON.stringify(r))
 r = await login(NEW1); check('change: new password works', r.status === 200 && r.json.ok, JSON.stringify(r))
@@ -51,7 +51,7 @@ r = await call('POST', '/password/forgot'); check('forgot: reports email not set
 // ---- reset, 2FA off ----
 let t = injectToken()
 r = await call('POST', '/password/reset', { token: 'not-the-token', password: NEW2 }); check('reset: wrong token rejected', r.status === 401, JSON.stringify(r))
-r = await call('POST', '/password/reset', { token: t, password: 'short' }); check('reset: short password rejected, token kept', r.status === 400, JSON.stringify(r))
+r = await call('POST', '/password/reset', { token: t, password: '' }); check('reset: empty password rejected, token kept', r.status === 400, JSON.stringify(r))
 r = await call('POST', '/password/reset', { token: t, password: NEW2 }); check('reset: works', r.status === 200 && r.json.ok, JSON.stringify(r))
 r = await call('POST', '/password/reset', { token: t, password: NEW3 }); check('reset: token is single-use', r.status === 401, JSON.stringify(r))
 r = await login(NEW1); check('reset: previous password no longer works', r.status === 401, JSON.stringify(r))

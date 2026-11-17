@@ -105,7 +105,7 @@ export function Login({ onDone }: { onDone: () => void }) {
       )}
       {step === 'reset' && (
         <>
-          <p className="muted" style={{ margin: 0 }}>Choose a new password (at least 10 characters).</p>
+          <p className="muted" style={{ margin: 0 }}>Choose a new password.</p>
           <label>
             <span className="lab">New password</span>
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus autoComplete="new-password" />

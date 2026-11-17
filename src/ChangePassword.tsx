@@ -52,7 +52,7 @@ function Form({ onClose, onDone }: { onClose: () => void; onDone: () => void }) 
           <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} autoFocus autoComplete="current-password" />
         </label>
         <label>
-          <span className="lab">New password (at least 10 characters)</span>
+          <span className="lab">New password</span>
           <input type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" />
         </label>
         <label>
